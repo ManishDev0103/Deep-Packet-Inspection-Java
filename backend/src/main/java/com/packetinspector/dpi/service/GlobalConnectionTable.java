@@ -1,12 +1,9 @@
 package com.packetinspector.dpi.service;
 
-import com.packetinspector.dpi.model.AppType;
-import com.packetinspector.dpi.model.Connection;
+import com.packetinspector.dpi.model.dto.Connection;
+import com.packetinspector.dpi.model.entity.AppType;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public final class GlobalConnectionTable {
     public record GlobalStats(int activeConnections, long connectionsSeen,

@@ -1,10 +1,9 @@
 package com.packetinspector.dpi.util;
 
-import com.packetinspector.dpi.model.EtherType;
-import com.packetinspector.dpi.model.ParsedPacket;
-import com.packetinspector.dpi.model.Protocol;
-import com.packetinspector.dpi.model.RawPacket;
-import com.packetinspector.dpi.model.TcpFlags;
+import com.packetinspector.dpi.model.dto.ParsedPacket;
+import com.packetinspector.dpi.model.dto.RawPacket;
+import com.packetinspector.dpi.model.entity.EtherType;
+import com.packetinspector.dpi.model.entity.Protocol;
 
 import java.util.Optional;
 
@@ -93,30 +92,7 @@ public final class PacketParser {
     }
 
     public static String protocolToString(int protocol) {
-        return switch (protocol) {
-            case Protocol.ICMP -> "ICMP";
-            case Protocol.TCP -> "TCP";
-            case Protocol.UDP -> "UDP";
-            default -> "Unknown(" + protocol + ")";
-        };
-    }
-
-    public static String tcpFlagsToString(int flags) {
-        StringBuilder result = new StringBuilder();
-        appendFlag(result, flags, TcpFlags.SYN, "SYN");
-        appendFlag(result, flags, TcpFlags.ACK, "ACK");
-        appendFlag(result, flags, TcpFlags.FIN, "FIN");
-        appendFlag(result, flags, TcpFlags.RST, "RST");
-        appendFlag(result, flags, TcpFlags.PSH, "PSH");
-        appendFlag(result, flags, TcpFlags.URG, "URG");
-        return result.isEmpty() ? "none" : result.toString();
-    }
-
-    private static void appendFlag(StringBuilder result, int flags, int mask, String name) {
-        if ((flags & mask) != 0) {
-            if (!result.isEmpty()) result.append(' ');
-            result.append(name);
-        }
+        return Protocol.toString(protocol);
     }
 
     private static int readU16(byte[] data, int offset) {
@@ -124,9 +100,9 @@ public final class PacketParser {
     }
 
     private static long readU32(byte[] data, int offset) {
-        return ((long) Byte.toUnsignedInt(data[offset]) << 24)
-                | ((long) Byte.toUnsignedInt(data[offset + 1]) << 16)
-                | ((long) Byte.toUnsignedInt(data[offset + 2]) << 8)
-                | Byte.toUnsignedInt(data[offset + 3]);
+        return (((long) Byte.toUnsignedInt(data[offset])) << 24)
+                | (((long) Byte.toUnsignedInt(data[offset + 1])) << 16)
+                | (((long) Byte.toUnsignedInt(data[offset + 2])) << 8)
+                | ((long) Byte.toUnsignedInt(data[offset + 3]));
     }
 }

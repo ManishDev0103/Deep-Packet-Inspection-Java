@@ -1,12 +1,9 @@
 package com.packetinspector.dpi.service;
 
-import com.packetinspector.dpi.model.AppType;
-import com.packetinspector.dpi.model.FiveTuple;
-import com.packetinspector.dpi.model.PacketJob;
-import com.packetinspector.dpi.model.ParsedPacket;
-import com.packetinspector.dpi.model.ProcessingReport;
-import com.packetinspector.dpi.model.RawPacket;
 import com.packetinspector.dpi.exception.InvalidPcapException;
+import com.packetinspector.dpi.model.dto.*;
+import com.packetinspector.dpi.model.entity.*;
+import com.packetinspector.dpi.repository.ConnectionRepository;
 import com.packetinspector.dpi.util.PacketParser;
 import com.packetinspector.dpi.util.PcapReader;
 import com.packetinspector.dpi.util.PcapWriter;
@@ -14,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -22,21 +20,29 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 
 @Service
-public final class DpiEngine {
+public class DpiEngine {
     private static final int LOAD_BALANCER_COUNT = 2;
     private static final int FAST_PATHS_PER_BALANCER = 2;
     private static final int QUEUE_CAPACITY = 10_000;
 
+    private final RuleManager ruleManager;
+    private final ConnectionRepository connectionRepository;
     private final PacketParser parser = new PacketParser();
 
-    public ProcessingReport process(Path inputPath, Path outputPath, List<String> blockedIps,
-                                    List<String> blockedApps, List<String> blockedDomains,
+    public DpiEngine(RuleManager ruleManager, ConnectionRepository connectionRepository) {
+        this.ruleManager = ruleManager;
+        this.connectionRepository = connectionRepository;
+    }
+
+    public ProcessingReport process(Path inputPath, Path outputPath,
+                                    List<String> blockedIps,
+                                    List<String> blockedApps,
+                                    List<String> blockedDomains,
                                     List<Integer> blockedPorts) throws IOException {
-        RuleManager rules = new RuleManager();
-        blockedIps.forEach(rules::blockIp);
-        blockedApps.stream().map(AppType::fromName).forEach(rules::blockApp);
-        blockedDomains.forEach(rules::blockDomain);
-        blockedPorts.forEach(rules::blockPort);
+        if (blockedIps != null) blockedIps.forEach(ruleManager::blockIp);
+        if (blockedApps != null) blockedApps.stream().map(AppType::fromDisplayName).forEach(ruleManager::blockApp);
+        if (blockedDomains != null) blockedDomains.forEach(ruleManager::blockDomain);
+        if (blockedPorts != null) blockedPorts.forEach(ruleManager::blockPort);
 
         LongAdder totalPackets = new LongAdder();
         LongAdder totalBytes = new LongAdder();
@@ -45,8 +51,9 @@ public final class DpiEngine {
         BlockingQueue<PacketJob> outputQueue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
         List<FastPathProcessor> processors = new ArrayList<>();
         List<LoadBalancer> balancers = new ArrayList<>();
+
         for (int i = 0; i < LOAD_BALANCER_COUNT * FAST_PATHS_PER_BALANCER; i++) {
-            processors.add(new FastPathProcessor(i, QUEUE_CAPACITY, outputQueue, rules));
+            processors.add(new FastPathProcessor(i, QUEUE_CAPACITY, outputQueue, ruleManager));
         }
         for (int i = 0; i < LOAD_BALANCER_COUNT; i++) {
             List<BlockingQueue<PacketJob>> queues = processors.subList(
@@ -65,6 +72,7 @@ public final class DpiEngine {
         } catch (IOException exception) {
             throw new InvalidPcapException("Unable to read the uploaded PCAP", exception);
         }
+
         try (reader; PcapWriter writer = new PcapWriter(outputPath, reader.globalHeader())) {
             Thread outputThread = new Thread(
                     () -> writeOutput(outputQueue, writer, outputFailure), "dpi-output");
@@ -83,7 +91,8 @@ public final class DpiEngine {
                             && (parsed.get().hasTcp() || parsed.get().hasUdp())) {
                         ParsedPacket packet = parsed.get();
                         FiveTuple tuple = new FiveTuple(
-                                parseIpv4(packet.sourceIp()), parseIpv4(packet.destinationIp()),
+                                RuleManager.parseIpv4(packet.sourceIp()),
+                                RuleManager.parseIpv4(packet.destinationIp()),
                                 packet.sourcePort(), packet.destinationPort(), packet.protocol());
                         PacketJob job = createJob(packetId++, raw, packet, tuple);
                         totalPackets.increment();
@@ -99,108 +108,136 @@ public final class DpiEngine {
                 readFailure = new IOException("Unable to read the uploaded PCAP", exception);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                readFailure = new IOException("PCAP processing was interrupted", exception);
-            } finally {
-                finishPipeline(balancers, processors, outputQueue, outputThread);
+                readFailure = new IOException("Packet ingestion was interrupted", exception);
             }
 
-            if (readFailure != null) {
-                throw new InvalidPcapException("Unable to read the uploaded PCAP", readFailure);
-            }
-            if (outputFailure.get() != null) throw outputFailure.get();
             for (LoadBalancer balancer : balancers) {
-                if (balancer.failure() != null) throw balancer.failure();
+                try {
+                    balancer.finish();
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            for (LoadBalancer balancer : balancers) {
+                try {
+                    balancer.join();
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
             }
             for (FastPathProcessor processor : processors) {
-                if (processor.failure() != null) throw processor.failure();
+                try {
+                    processor.finish();
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
             }
-            return createReport(totalPackets.sum(), totalBytes.sum(), tcpPackets.sum(),
-                    udpPackets.sum(), balancers, processors, connectionTable, rules);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IOException("PCAP processing was interrupted", exception);
+            for (FastPathProcessor processor : processors) {
+                try {
+                    processor.join();
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
+            try {
+                outputQueue.put(PacketJob.stopSignal());
+                outputThread.join();
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+
+            if (readFailure != null) throw readFailure;
+            if (outputFailure.get() != null) throw outputFailure.get();
+
+            // Persist flows to MySQL
+            persistConnections(trackers);
+
+            long totalCount = totalPackets.sum();
+            long lbReceived = balancers.stream().mapToLong(b -> b.stats().packetsReceived()).sum();
+            long lbDispatched = balancers.stream().mapToLong(b -> b.stats().packetsDispatched()).sum();
+            long fpProcessed = processors.stream().mapToLong(p -> p.stats().processed()).sum();
+            long fpForwarded = processors.stream().mapToLong(p -> p.stats().forwarded()).sum();
+            long fpDropped = processors.stream().mapToLong(p -> p.stats().dropped()).sum();
+            long sniHits = processors.stream().mapToLong(p -> p.stats().sniExtractions()).sum();
+            long appHits = processors.stream().mapToLong(p -> p.stats().classificationHits()).sum();
+
+            GlobalConnectionTable.GlobalStats globalStats = connectionTable.stats();
+            RuleStats ruleStats = ruleManager.getStats();
+            ProcessingReport.RuleCounts counts = new ProcessingReport.RuleCounts(
+                    ruleStats.blockedIps(), ruleStats.blockedApps(),
+                    ruleStats.blockedDomains(), ruleStats.blockedPorts());
+
+            return new ProcessingReport(
+                    totalCount, totalBytes.sum(), fpForwarded, fpDropped,
+                    tcpPackets.sum(), udpPackets.sum(), 0,
+                    globalStats.activeConnections(), globalStats.connectionsSeen(),
+                    lbReceived, lbDispatched, fpProcessed, fpForwarded, fpDropped,
+                    sniHits, appHits, counts,
+                    globalStats.applications(), globalStats.topDomains());
         }
     }
 
-    private static PacketJob createJob(long packetId, RawPacket raw, ParsedPacket packet,
-                                       FiveTuple tuple) {
-        byte[] data = raw.data();
-        int ipOffset = 14;
-        int transportOffset = ipOffset + (Byte.toUnsignedInt(data[ipOffset]) & 0x0f) * 4;
-        return new PacketJob(packetId, tuple, data, 0, ipOffset, transportOffset,
-                packet.payloadOffset(), packet.payloadLength(), packet.tcpFlags(),
-                packet.timestampSeconds(), packet.timestampFraction());
+    private void persistConnections(List<ConnectionTracker> trackers) {
+        if (connectionRepository == null) return;
+        try {
+            List<ConnectionEntity> entities = new ArrayList<>();
+            for (ConnectionTracker tracker : trackers) {
+                for (Connection c : tracker.all()) {
+                    ConnectionEntity entity = new ConnectionEntity();
+                    entity.setFlowKey(c.tuple().toFormattedString());
+                    entity.setSrcIp(FiveTuple.ipToString(c.tuple().srcIp()));
+                    entity.setSrcPort(c.tuple().srcPort());
+                    entity.setDstIp(FiveTuple.ipToString(c.tuple().dstIp()));
+                    entity.setDstPort(c.tuple().dstPort());
+                    entity.setProtocol(c.tuple().protocol());
+                    entity.setState(c.state());
+                    entity.setAppType(c.appType());
+                    entity.setSni(c.sni());
+                    entity.setPacketsIn(c.packetsIn());
+                    entity.setPacketsOut(c.packetsOut());
+                    entity.setBytesIn(c.bytesIn());
+                    entity.setBytesOut(c.bytesOut());
+                    entity.setAction(c.action());
+                    entity.setFirstSeen(Instant.now());
+                    entity.setLastSeen(Instant.now());
+                    entities.add(entity);
+                    if (entities.size() >= 100) break;
+                }
+                if (entities.size() >= 100) break;
+            }
+            if (!entities.isEmpty()) {
+                connectionRepository.saveAll(entities);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
-    private static long parseIpv4(String value) {
-        long result = 0;
-        for (String part : value.split("\\.")) result = (result << 8) | Integer.parseInt(part);
-        return result;
+    private static PacketJob createJob(long packetId, RawPacket raw, ParsedPacket packet, FiveTuple tuple) {
+        int transportOffset = packet.hasTcp()
+                ? packet.payloadOffset() - 20
+                : (packet.hasUdp() ? packet.payloadOffset() - 8 : packet.payloadOffset());
+        return new PacketJob(
+                packetId, tuple, raw.data(), 0, 14, transportOffset,
+                packet.payloadOffset(), packet.payloadLength(),
+                packet.tcpFlags(), raw.header().timestampSeconds(), raw.header().timestampFraction());
     }
 
     private static void writeOutput(BlockingQueue<PacketJob> queue, PcapWriter writer,
                                     AtomicReference<IOException> failure) {
-        IOException writeFailure = null;
         try {
             PacketJob job;
             while (!(job = queue.take()).endOfStream()) {
-                if (writeFailure == null) {
-                    try {
-                        writer.write(new RawPacket(
-                                new com.packetinspector.dpi.model.PcapPacketHeader(
-                                        job.timestampSeconds(), job.timestampFraction(),
-                                        job.data().length, job.data().length), job.data()));
-                    } catch (IOException exception) {
-                        writeFailure = exception;
-                    }
-                }
+                writer.write(new RawPacket(
+                        new PcapPacketHeader(job.timestampSeconds(), job.timestampFraction(),
+                                job.data().length, job.data().length),
+                        job.data()));
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            failure.set(new IOException("Output writer was interrupted", exception));
+        } catch (IOException exception) {
+            failure.set(exception);
         }
-        failure.set(writeFailure);
-    }
-
-    private static void finishPipeline(List<LoadBalancer> balancers,
-                                       List<FastPathProcessor> processors,
-                                       BlockingQueue<PacketJob> outputQueue,
-                                       Thread outputThread) throws InterruptedException {
-        for (LoadBalancer balancer : balancers) balancer.finish();
-        for (LoadBalancer balancer : balancers) balancer.join();
-        for (FastPathProcessor processor : processors) processor.finish();
-        for (FastPathProcessor processor : processors) processor.join();
-        outputQueue.put(PacketJob.stopSignal());
-        outputThread.join();
-    }
-
-    private static ProcessingReport createReport(long totalPackets, long totalBytes,
-                                                 long tcpPackets, long udpPackets,
-                                                 List<LoadBalancer> balancers,
-                                                 List<FastPathProcessor> processors,
-                                                 GlobalConnectionTable connectionTable,
-                                                 RuleManager rules) {
-        long lbReceived = 0, lbDispatched = 0, fpProcessed = 0, fpForwarded = 0;
-        long fpDropped = 0, sniExtractions = 0, classificationHits = 0;
-        for (LoadBalancer balancer : balancers) {
-            lbReceived += balancer.stats().packetsReceived();
-            lbDispatched += balancer.stats().packetsDispatched();
-        }
-        for (FastPathProcessor processor : processors) {
-            FastPathProcessor.Stats stats = processor.stats();
-            fpProcessed += stats.processed();
-            fpForwarded += stats.forwarded();
-            fpDropped += stats.dropped();
-            sniExtractions += stats.sniExtractions();
-            classificationHits += stats.classificationHits();
-        }
-        GlobalConnectionTable.GlobalStats connections = connectionTable.stats();
-        RuleManager.RuleStats ruleStats = rules.stats();
-        return new ProcessingReport(totalPackets, totalBytes, fpForwarded, fpDropped,
-                tcpPackets, udpPackets, 0, connections.activeConnections(),
-                connections.connectionsSeen(), lbReceived, lbDispatched, fpProcessed,
-                fpForwarded, fpDropped, sniExtractions, classificationHits,
-                new ProcessingReport.RuleCounts(ruleStats.blockedIps(), ruleStats.blockedApps(),
-                        ruleStats.blockedDomains(), ruleStats.blockedPorts()),
-                connections.applications(), connections.topDomains());
     }
 }

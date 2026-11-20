@@ -1,27 +1,21 @@
 package com.packetinspector.dpi.service;
 
-import com.packetinspector.dpi.model.AppType;
-import com.packetinspector.dpi.util.ApplicationClassifier;
-import com.packetinspector.dpi.util.PacketParser;
+import com.packetinspector.dpi.model.dto.BlockReason;
+import com.packetinspector.dpi.model.dto.RuleStats;
+import com.packetinspector.dpi.model.entity.AppType;
+import com.packetinspector.dpi.model.entity.BlockingRuleEntity;
+import com.packetinspector.dpi.repository.BlockingRuleRepository;
+import jakarta.annotation.PostConstruct;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public final class RuleManager {
-    public enum RuleType { IP, PORT, APP, DOMAIN }
+@Service
+public class RuleManager {
 
-    public record BlockReason(RuleType type, String detail) {}
-
-    public record RuleStats(int blockedIps, int blockedApps, int blockedDomains, int blockedPorts) {}
+    private final BlockingRuleRepository ruleRepository;
 
     private final Set<Long> blockedIps = new HashSet<>();
     private final Set<AppType> blockedApps = new HashSet<>();
@@ -30,78 +24,140 @@ public final class RuleManager {
     private final Set<Integer> blockedPorts = new HashSet<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    public RuleManager(BlockingRuleRepository ruleRepository) {
+        this.ruleRepository = ruleRepository;
+    }
+
+    @PostConstruct
+    public void loadFromDatabase() {
+        if (ruleRepository == null) return;
+        lock.writeLock().lock();
+        try {
+            for (BlockingRuleEntity rule : ruleRepository.findAll()) {
+                switch (rule.getRuleType().toUpperCase(Locale.ROOT)) {
+                    case "IP" -> blockedIps.add(parseIpv4(rule.getRuleValue()));
+                    case "APP" -> blockedApps.add(AppType.fromDisplayName(rule.getRuleValue()));
+                    case "DOMAIN" -> {
+                        String dom = rule.getRuleValue().toLowerCase(Locale.ROOT);
+                        if (dom.contains("*")) domainPatterns.add(dom);
+                        else blockedDomains.add(dom);
+                    }
+                    case "PORT" -> blockedPorts.add(Integer.parseInt(rule.getRuleValue()));
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Transactional
     public void blockIp(String value) {
+        long ip = parseIpv4(value);
         lock.writeLock().lock();
         try {
-            blockedIps.add(parseIpv4(value));
+            blockedIps.add(ip);
+            if (ruleRepository != null && !ruleRepository.existsByRuleTypeAndRuleValue("IP", value)) {
+                ruleRepository.save(new BlockingRuleEntity("IP", value));
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    @Transactional
     public void unblockIp(String value) {
+        long ip = parseIpv4(value);
         lock.writeLock().lock();
         try {
-            blockedIps.remove(parseIpv4(value));
+            blockedIps.remove(ip);
+            if (ruleRepository != null) {
+                ruleRepository.deleteByRuleTypeAndRuleValue("IP", value);
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    @Transactional
     public void blockApp(AppType app) {
         lock.writeLock().lock();
         try {
             blockedApps.add(app);
+            if (ruleRepository != null && !ruleRepository.existsByRuleTypeAndRuleValue("APP", app.name())) {
+                ruleRepository.save(new BlockingRuleEntity("APP", app.name()));
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    @Transactional
     public void unblockApp(AppType app) {
         lock.writeLock().lock();
         try {
             blockedApps.remove(app);
+            if (ruleRepository != null) {
+                ruleRepository.deleteByRuleTypeAndRuleValue("APP", app.name());
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    @Transactional
     public void blockDomain(String domain) {
-        String value = domain.trim();
+        String value = domain.trim().toLowerCase(Locale.ROOT);
         if (value.isEmpty()) throw new IllegalArgumentException("Domain rule cannot be empty");
         lock.writeLock().lock();
         try {
             if (value.contains("*")) domainPatterns.add(value);
             else blockedDomains.add(value);
+            if (ruleRepository != null && !ruleRepository.existsByRuleTypeAndRuleValue("DOMAIN", value)) {
+                ruleRepository.save(new BlockingRuleEntity("DOMAIN", value));
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    @Transactional
     public void unblockDomain(String domain) {
+        String value = domain.trim().toLowerCase(Locale.ROOT);
         lock.writeLock().lock();
         try {
-            if (domain.contains("*")) domainPatterns.remove(domain);
-            else blockedDomains.remove(domain);
+            if (value.contains("*")) domainPatterns.remove(value);
+            else blockedDomains.remove(value);
+            if (ruleRepository != null) {
+                ruleRepository.deleteByRuleTypeAndRuleValue("DOMAIN", value);
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    @Transactional
     public void blockPort(int port) {
         if (port < 0 || port > 0xffff) throw new IllegalArgumentException("Port must be from 0 to 65535");
         lock.writeLock().lock();
         try {
             blockedPorts.add(port);
+            if (ruleRepository != null && !ruleRepository.existsByRuleTypeAndRuleValue("PORT", String.valueOf(port))) {
+                ruleRepository.save(new BlockingRuleEntity("PORT", String.valueOf(port)));
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    @Transactional
     public void unblockPort(int port) {
         lock.writeLock().lock();
         try {
             blockedPorts.remove(port);
+            if (ruleRepository != null) {
+                ruleRepository.deleteByRuleTypeAndRuleValue("PORT", String.valueOf(port));
+            }
         } finally {
             lock.writeLock().unlock();
         }
@@ -126,12 +182,15 @@ public final class RuleManager {
     }
 
     public boolean isDomainBlocked(String domain) {
+        if (domain == null || domain.isEmpty()) return false;
+        String normalized = domain.toLowerCase(Locale.ROOT);
         lock.readLock().lock();
         try {
-            if (blockedDomains.contains(domain)) return true;
-            String normalizedDomain = domain.toLowerCase(Locale.ROOT);
-            return domainPatterns.stream().map(value -> value.toLowerCase(Locale.ROOT))
-                    .anyMatch(pattern -> matchesPattern(normalizedDomain, pattern));
+            if (blockedDomains.contains(normalized)) return true;
+            for (String pattern : domainPatterns) {
+                if (domainMatchesPattern(normalized, pattern)) return true;
+            }
+            return false;
         } finally {
             lock.readLock().unlock();
         }
@@ -146,78 +205,28 @@ public final class RuleManager {
         }
     }
 
-    public Optional<BlockReason> shouldBlock(long sourceIp, int destinationPort,
-                                              AppType app, String domain) {
+    public Optional<BlockReason> shouldBlock(long srcIp, int dstPort, AppType app, String domain) {
+        if (isIpBlocked(srcIp)) return Optional.of(new BlockReason("IP", ipToString(srcIp)));
+        if (isPortBlocked(dstPort)) return Optional.of(new BlockReason("PORT", String.valueOf(dstPort)));
+        if (isAppBlocked(app)) return Optional.of(new BlockReason("APP", app.getDisplayName()));
+        if (isDomainBlocked(domain)) return Optional.of(new BlockReason("DOMAIN", domain));
+        return Optional.empty();
+    }
+
+    public RuleStats getStats() {
         lock.readLock().lock();
         try {
-            if (blockedIps.contains(sourceIp)) {
-                return Optional.of(new BlockReason(RuleType.IP, PacketParser.ipToString(sourceIp)));
-            }
-            if (blockedPorts.contains(destinationPort)) {
-                return Optional.of(new BlockReason(RuleType.PORT, Integer.toString(destinationPort)));
-            }
-            if (blockedApps.contains(app)) {
-                return Optional.of(new BlockReason(RuleType.APP, app.label()));
-            }
-            if (!domain.isEmpty() && (blockedDomains.contains(domain)
-                    || domainPatterns.stream().map(value -> value.toLowerCase(Locale.ROOT))
-                    .anyMatch(pattern -> matchesPattern(domain.toLowerCase(Locale.ROOT), pattern)))) {
-                return Optional.of(new BlockReason(RuleType.DOMAIN, domain));
-            }
-            return Optional.empty();
+            return new RuleStats(
+                    blockedIps.size(),
+                    blockedApps.size(),
+                    blockedDomains.size() + domainPatterns.size(),
+                    blockedPorts.size());
         } finally {
             lock.readLock().unlock();
         }
     }
 
-    public void loadRules(Path path) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(path)) {
-            loadRules(reader);
-        }
-    }
-
-    public void loadRules(BufferedReader reader) throws IOException {
-        String section = "";
-        String line;
-        while ((line = reader.readLine()) != null) {
-            line = line.trim();
-            if (line.isEmpty()) continue;
-            if (line.startsWith("[") && line.endsWith("]")) {
-                section = line;
-                continue;
-            }
-            switch (section) {
-                case "[BLOCKED_IPS]" -> blockIp(line);
-                case "[BLOCKED_APPS]" -> blockApp(AppType.fromName(line));
-                case "[BLOCKED_DOMAINS]" -> blockDomain(line);
-                case "[BLOCKED_PORTS]" -> blockPort(parsePort(line));
-                default -> throw new IOException("Rule outside a recognized section: " + line);
-            }
-        }
-    }
-
-    public void saveRules(Path path) throws IOException {
-        List<String> lines = new ArrayList<>();
-        lock.readLock().lock();
-        try {
-            lines.add("[BLOCKED_IPS]");
-            blockedIps.stream().map(PacketParser::ipToString).forEach(lines::add);
-            lines.add("");
-            lines.add("[BLOCKED_APPS]");
-            blockedApps.stream().map(AppType::label).forEach(lines::add);
-            lines.add("");
-            lines.add("[BLOCKED_DOMAINS]");
-            lines.addAll(blockedDomains);
-            lines.addAll(domainPatterns);
-            lines.add("");
-            lines.add("[BLOCKED_PORTS]");
-            blockedPorts.stream().map(String::valueOf).forEach(lines::add);
-        } finally {
-            lock.readLock().unlock();
-        }
-        Files.write(path, lines);
-    }
-
+    @Transactional
     public void clearAll() {
         lock.writeLock().lock();
         try {
@@ -226,52 +235,36 @@ public final class RuleManager {
             blockedDomains.clear();
             domainPatterns.clear();
             blockedPorts.clear();
+            if (ruleRepository != null) {
+                ruleRepository.deleteAll();
+            }
         } finally {
             lock.writeLock().unlock();
         }
     }
 
-    public RuleStats stats() {
-        lock.readLock().lock();
-        try {
-            return new RuleStats(blockedIps.size(), blockedApps.size(),
-                    blockedDomains.size() + domainPatterns.size(), blockedPorts.size());
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    private static boolean matchesPattern(String domain, String pattern) {
-        if (!pattern.startsWith("*.")) return false;
-        String bareDomain = pattern.substring(2);
-        return domain.equals(bareDomain) || domain.endsWith("." + bareDomain);
-    }
-
-    private static long parseIpv4(String value) {
-        String[] parts = value.split("\\.", -1);
-        if (parts.length != 4) throw new IllegalArgumentException("Invalid IPv4 address: " + value);
+    public static long parseIpv4(String ip) {
+        String[] parts = ip.trim().split("\\.");
+        if (parts.length != 4) throw new IllegalArgumentException("Invalid IPv4 address: " + ip);
         long result = 0;
-        for (String part : parts) {
-            int octet;
-            try {
-                if (part.isEmpty() || !part.chars().allMatch(Character::isDigit)) {
-                    throw new NumberFormatException();
-                }
-                octet = Integer.parseInt(part);
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("Invalid IPv4 address: " + value, exception);
-            }
-            if (octet > 255) throw new IllegalArgumentException("Invalid IPv4 address: " + value);
-            result = (result << 8) | octet;
+        for (int i = 0; i < 4; i++) {
+            long octet = Long.parseLong(parts[i]);
+            if (octet < 0 || octet > 255) throw new IllegalArgumentException("Invalid octet: " + octet);
+            result |= (octet << (i * 8));
         }
         return result;
     }
 
-    private static int parsePort(String value) throws IOException {
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException exception) {
-            throw new IOException("Invalid blocked port: " + value, exception);
+    public static String ipToString(long ip) {
+        return "%d.%d.%d.%d".formatted(
+                ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, (ip >> 24) & 0xff);
+    }
+
+    private static boolean domainMatchesPattern(String domain, String pattern) {
+        if (pattern.startsWith("*.")) {
+            String suffix = pattern.substring(2);
+            return domain.endsWith(suffix) || domain.equals(suffix);
         }
+        return domain.contains(pattern);
     }
 }

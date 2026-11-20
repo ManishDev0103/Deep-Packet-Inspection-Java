@@ -1,6 +1,6 @@
 package com.packetinspector.dpi.util;
 
-import com.packetinspector.dpi.model.AppType;
+import com.packetinspector.dpi.model.entity.AppType;
 
 import java.util.Locale;
 import java.util.Map;

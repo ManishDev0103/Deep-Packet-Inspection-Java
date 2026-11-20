@@ -1,12 +1,12 @@
 package com.packetinspector.dpi.service;
 
-import com.packetinspector.dpi.model.AppType;
-import com.packetinspector.dpi.model.Connection;
-import com.packetinspector.dpi.model.ConnectionState;
-import com.packetinspector.dpi.model.PacketAction;
-import com.packetinspector.dpi.model.PacketJob;
-import com.packetinspector.dpi.model.Protocol;
-import com.packetinspector.dpi.model.TcpFlags;
+import com.packetinspector.dpi.model.dto.Connection;
+import com.packetinspector.dpi.model.dto.PacketJob;
+import com.packetinspector.dpi.model.entity.AppType;
+import com.packetinspector.dpi.model.entity.ConnectionState;
+import com.packetinspector.dpi.model.entity.PacketAction;
+import com.packetinspector.dpi.model.entity.Protocol;
+import com.packetinspector.dpi.model.entity.TcpFlags;
 import com.packetinspector.dpi.util.ApplicationClassifier;
 import com.packetinspector.dpi.util.DnsExtractor;
 import com.packetinspector.dpi.util.HttpHostExtractor;
@@ -101,15 +101,22 @@ final class FastPathProcessor implements Runnable {
     }
 
     private PacketAction processPacket(PacketJob job) {
+        boolean outbound = job.tuple().srcPort() >= job.tuple().dstPort();
         Connection connection = connectionTracker.getOrCreate(job.tuple());
-        connection = connectionTracker.updateTraffic(connection, job.data().length, true);
-        if (job.tuple().protocol() == Protocol.TCP) connection = updateTcpState(connection, job.tcpFlags());
-        if (connection.state() == ConnectionState.BLOCKED) return PacketAction.DROP;
+        connection = connectionTracker.updateTraffic(connection, job.data().length, outbound);
+
+        if (job.tuple().protocol() == Protocol.TCP) {
+            updateTcpState(connection, job.tcpFlags());
+        }
+
+        if (connection.action() == PacketAction.DROP) return PacketAction.DROP;
 
         if (connection.state() != ConnectionState.CLASSIFIED && job.payloadLength() > 0) {
-            connection = inspectPayload(job, connection);
+            inspectPayload(job, connection);
+            connection = connectionTracker.get(job.tuple());
         }
-        var reason = rules.shouldBlock(job.tuple().sourceIp(), job.tuple().destinationPort(),
+
+        var reason = rules.shouldBlock(job.tuple().srcIp(), job.tuple().dstPort(),
                 connection.appType(), connection.sni());
         if (reason.isPresent()) {
             connectionTracker.block(connection);
@@ -118,56 +125,61 @@ final class FastPathProcessor implements Runnable {
         return PacketAction.FORWARD;
     }
 
-    private Connection inspectPayload(PacketJob job, Connection connection) {
-        byte[] data = job.data();
+    private void inspectPayload(PacketJob job, Connection connection) {
+        byte[] payload = job.data();
         int offset = job.payloadOffset();
         int length = job.payloadLength();
-        var sni = (job.tuple().destinationPort() == 443 || length >= 50)
-                ? sniExtractor.extract(data, offset, length) : java.util.Optional.<String>empty();
-        if (sni.isPresent()) {
-            String serverName = sni.get();
-            sniExtractions++;
-            AppType app = classifier.fromDomain(serverName);
-            if (app != AppType.UNKNOWN && app != AppType.HTTPS) classificationHits++;
-            return connectionTracker.classify(connection, app, serverName);
-        }
-        if (job.tuple().destinationPort() == 80) {
-            var host = httpHostExtractor.extract(data, offset, length);
+        if (length <= 0) return;
+
+        if (job.tuple().protocol() == Protocol.TCP) {
+            var sni = sniExtractor.extract(payload, offset, length);
+            if (sni.isPresent()) {
+                sniExtractions++;
+                classificationHits++;
+                AppType app = classifier.fromDomain(sni.get());
+                connectionTracker.classify(connection, app, sni.get());
+                return;
+            }
+
+            var host = httpHostExtractor.extract(payload, offset, length);
             if (host.isPresent()) {
+                classificationHits++;
                 AppType app = classifier.fromDomain(host.get());
-                if (app != AppType.UNKNOWN && app != AppType.HTTP) classificationHits++;
-                return connectionTracker.classify(connection, app, host.get());
+                connectionTracker.classify(connection, app, host.get());
+                return;
+            }
+        } else if (job.tuple().protocol() == Protocol.UDP) {
+            if (job.tuple().dstPort() == 53 || job.tuple().srcPort() == 53) {
+                var query = dnsExtractor.extractQuery(payload, offset, length);
+                if (query.isPresent()) {
+                    classificationHits++;
+                    AppType app = classifier.fromDomain(query.get());
+                    connectionTracker.classify(connection, app, query.get());
+                    return;
+                }
             }
         }
-        if (job.tuple().destinationPort() == 53 || job.tuple().sourcePort() == 53) {
-            var domain = dnsExtractor.extractQuery(data, offset, length);
-            if (domain.isPresent()) return connectionTracker.classify(connection, AppType.DNS, domain.get());
-        }
-        if (job.tuple().destinationPort() == 80) {
-            return connectionTracker.classify(connection, AppType.HTTP, "");
-        }
-        if (job.tuple().destinationPort() == 443) {
-            return connectionTracker.classify(connection, AppType.HTTPS, "");
-        }
-        return connection;
     }
 
-    private Connection updateTcpState(Connection connection, int flags) {
-        boolean synSeen = connection.synSeen();
-        boolean synAckSeen = connection.synAckSeen();
-        boolean finSeen = connection.finSeen();
+    private void updateTcpState(Connection connection, int tcpFlags) {
+        boolean syn = (tcpFlags & TcpFlags.SYN) != 0;
+        boolean ack = (tcpFlags & TcpFlags.ACK) != 0;
+        boolean fin = (tcpFlags & TcpFlags.FIN) != 0;
+        boolean rst = (tcpFlags & TcpFlags.RST) != 0;
+
+        if (rst) {
+            connectionTracker.close(connection.tuple());
+            return;
+        }
+
+        boolean synSeen = connection.synSeen() || syn;
+        boolean synAckSeen = connection.synAckSeen() || (syn && ack);
+        boolean finSeen = connection.finSeen() || fin;
+
         ConnectionState state = connection.state();
-        if ((flags & TcpFlags.SYN) != 0) {
-            if ((flags & TcpFlags.ACK) != 0) synAckSeen = true;
-            else synSeen = true;
-        }
-        if (synSeen && synAckSeen && (flags & TcpFlags.ACK) != 0
-                && state == ConnectionState.NEW) state = ConnectionState.ESTABLISHED;
-        if ((flags & TcpFlags.FIN) != 0) finSeen = true;
-        if ((flags & TcpFlags.RST) != 0 || (finSeen && (flags & TcpFlags.ACK) != 0)) {
-            state = ConnectionState.CLOSED;
-        }
-        Connection updated = connection.withTcpState(state, synSeen, synAckSeen, finSeen);
-        return connectionTracker.update(updated);
+        if (state == ConnectionState.NEW && syn) state = ConnectionState.ESTABLISHED;
+        if (fin) state = ConnectionState.CLOSED;
+
+        connectionTracker.update(connection.withTcpState(state, synSeen, synAckSeen, finSeen));
     }
 }

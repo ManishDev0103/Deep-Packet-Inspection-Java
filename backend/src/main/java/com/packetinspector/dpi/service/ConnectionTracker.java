@@ -1,16 +1,12 @@
 package com.packetinspector.dpi.service;
 
-import com.packetinspector.dpi.model.AppType;
-import com.packetinspector.dpi.model.Connection;
-import com.packetinspector.dpi.model.ConnectionState;
-import com.packetinspector.dpi.model.FiveTuple;
+import com.packetinspector.dpi.model.dto.Connection;
+import com.packetinspector.dpi.model.dto.FiveTuple;
+import com.packetinspector.dpi.model.entity.AppType;
+import com.packetinspector.dpi.model.entity.ConnectionState;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public final class ConnectionTracker {
     public record TrackerStats(int activeConnections, long totalConnectionsSeen,

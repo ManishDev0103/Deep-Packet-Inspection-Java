@@ -1,6 +1,6 @@
 package com.packetinspector.dpi.service;
 
-import com.packetinspector.dpi.model.PacketJob;
+import com.packetinspector.dpi.model.dto.PacketJob;
 
 import java.io.IOException;
 import java.util.List;

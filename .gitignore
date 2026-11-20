@@ -1,4 +1,30 @@
-/target/
-/backend/target/
-/frontend/node_modules/
-/frontend/dist/
+# C++ build artifacts
+dpi_engine
+*.o
+*.a
+cmake_build/
+CMakeLists.txt
+generate_test_pcap.py
+output.pcap
+test_dpi.pcap
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+backend/target/
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+
+# Maven wrapper local copy
+maven/
+
+# IDE / OS
+.vscode/settings.json
+*.iml
+.DS_Store
+Thumbs.db
+*.swp

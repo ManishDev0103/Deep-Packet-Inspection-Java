@@ -1,8 +1,8 @@
 package com.packetinspector.dpi.util;
 
-import com.packetinspector.dpi.model.PcapGlobalHeader;
-import com.packetinspector.dpi.model.PcapPacketHeader;
-import com.packetinspector.dpi.model.RawPacket;
+import com.packetinspector.dpi.model.dto.PcapGlobalHeader;
+import com.packetinspector.dpi.model.dto.PcapPacketHeader;
+import com.packetinspector.dpi.model.dto.RawPacket;
 
 import java.io.BufferedInputStream;
 import java.io.EOFException;

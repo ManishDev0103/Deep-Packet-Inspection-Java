@@ -1,8 +1,8 @@
 package com.packetinspector.dpi.service;
 
-import com.packetinspector.dpi.model.PcapGlobalHeader;
-import com.packetinspector.dpi.model.PcapPacketHeader;
-import com.packetinspector.dpi.model.RawPacket;
+import com.packetinspector.dpi.model.dto.PcapGlobalHeader;
+import com.packetinspector.dpi.model.dto.PcapPacketHeader;
+import com.packetinspector.dpi.model.dto.RawPacket;
 import com.packetinspector.dpi.util.PcapReader;
 import com.packetinspector.dpi.util.PcapWriter;
 import org.junit.jupiter.api.Test;
@@ -20,7 +20,7 @@ class DpiEngineTest {
     @TempDir
     Path directory;
 
-    private final DpiEngine engine = new DpiEngine();
+    private final DpiEngine engine = new DpiEngine(new RuleManager(null), null);
 
     @Test
     void forwardsPacketAndWritesValidPcap() throws Exception {

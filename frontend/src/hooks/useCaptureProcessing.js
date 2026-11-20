@@ -14,16 +14,15 @@ export function useCaptureProcessing() {
     setDownloadUrl('')
   }
 
-  async function run(file, rules, username, password) {
+  async function run(file, rules) {
     setBusy(true)
     setError('')
     setReport(null)
     if (downloadUrl) URL.revokeObjectURL(downloadUrl)
     setDownloadUrl('')
     try {
-      const result = await processCapture(file, rules, username, password)
+      const result = await processCapture(file, rules)
       setReport(result.report)
-      setDownloadUrl(URL.createObjectURL(result.capture))
     } catch (requestError) {
       setError(requestError.message || 'PCAP processing failed.')
     } finally {
