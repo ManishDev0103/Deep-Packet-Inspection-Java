@@ -1,5 +1,26 @@
 # Windows Setup Guide
 
+## Java Spring Boot + React Dashboard
+
+Install Java 17 or newer, Maven, and Node.js 20.19 or newer. In PowerShell, start the backend:
+
+```powershell
+$env:DPI_USERNAME = "your-username"
+$env:DPI_PASSWORD = "your-password"
+mvn -f backend\pom.xml spring-boot:run
+```
+
+In a second terminal, start the frontend:
+
+```powershell
+npm --prefix frontend install
+npm --prefix frontend run dev
+```
+
+Open **http://127.0.0.1:5173** and provide the same HTTP Basic credentials. The app processes classic Ethernet PCAP files locally, supports source-IP, application, domain, and destination-port blocking rules, and downloads the filtered capture with its report. The backend accepts uploads up to 256 MB and binds only to loopback.
+
+The remaining instructions below are for building and running the original C++ implementation.
+
 This guide will help you build and run the DPI Engine on Windows. Follow these steps exactly.
 
 ---

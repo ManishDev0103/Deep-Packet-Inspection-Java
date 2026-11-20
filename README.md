@@ -1,5 +1,27 @@
 # DPI Engine - Deep Packet Inspection System
 
+## Java Spring Boot + React Dashboard
+
+The Java 17 backend and React/Vite frontend are in `backend/` and `frontend/`. The backend binds to loopback and uses HTTP Basic credentials from `DPI_USERNAME` and `DPI_PASSWORD`; captures are processed locally and are not persisted. The frontend requires Node.js 20.19 or newer.
+
+In PowerShell, configure credentials and start the backend:
+
+```powershell
+$env:DPI_USERNAME = "your-username"
+$env:DPI_PASSWORD = "your-password"
+mvn -f backend\pom.xml spring-boot:run
+```
+
+In another terminal, start the frontend:
+
+```powershell
+npm --prefix frontend install
+npm --prefix frontend run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173), upload a classic Ethernet PCAP, and apply optional source-IP, application, domain, or destination-port rules. The filtered PCAP is returned for download with packet and classification statistics. The engine processes IPv4 TCP/UDP traffic and classifies TLS SNI, HTTP Host, and DNS queries. Uploads are limited to 256 MB.
+
+For Windows setup details, see [WINDOWS_SETUP.md](WINDOWS_SETUP.md).
 
 This document explains **everything** about this project - from basic networking concepts to the complete code architecture. After reading this, you should understand exactly how packets flow through the system without needing to read the code.
 
@@ -18,6 +40,7 @@ This document explains **everything** about this project - from basic networking
 9. [How Blocking Works](#9-how-blocking-works)
 10. [Building and Running](#10-building-and-running)
 11. [Understanding the Output](#11-understanding-the-output)
+12. [Java Spring Boot + React Dashboard](#java-spring-boot--react-dashboard)
 
 ---
 
@@ -134,12 +157,14 @@ TLS Client Hello:
                     └─────────────┘
 ```
 
-### Two Versions
+### C++ Versions
 
 | Version | File | Use Case |
 |---------|------|----------|
 | Simple (Single-threaded) | `src/main_working.cpp` | Learning, small captures |
 | Multi-threaded | `src/dpi_mt.cpp` | Production, large captures |
+
+The Java port is in `backend/` (Spring Boot 3, Java 17) with its React/Vite dashboard in `frontend/`. Start instructions are at the top of this document.
 
 ---
 
@@ -168,6 +193,10 @@ packet_analyzer/
 │   ├── dpi_mt.cpp             # ★ MULTI-THREADED VERSION ★
 │   └── [other files]          # Supporting code
 │
+├── backend/                    # Java 17 Spring Boot API and DPI pipeline
+│   └── src/main/java/com/packetinspector/dpi/
+├── frontend/                   # React/Vite dashboard
+│   └── src/                    # API client, components, hooks, and page
 ├── generate_test_pcap.py      # Creates test data
 ├── test_dpi.pcap              # Sample capture with various traffic
 └── README.md                  # This file!

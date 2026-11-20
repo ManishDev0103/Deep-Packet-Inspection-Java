@@ -1,0 +1,12 @@
+server:
+  address: 127.0.0.1
+  port: 8080
+  servlet:
+    multipart:
+      max-file-size: 256MB
+      max-request-size: 260MB
+
+dpi:
+  auth:
+    username: ${DPI_USERNAME}
+    password: ${DPI_PASSWORD}
