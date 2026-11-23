@@ -2,7 +2,7 @@
 
 ## Java Spring Boot + React Dashboard
 
-The Java 17 backend and React/Vite frontend are in `backend/` and `frontend/`. The backend binds to loopback and uses HTTP Basic credentials from `DPI_USERNAME` and `DPI_PASSWORD`; captures are processed locally and are not persisted. The frontend requires Node.js 20.19 or newer.
+The Java 25 backend and React/Vite frontend are in `backend/` and `frontend/`. The backend binds to loopback and uses HTTP Basic credentials from `DPI_USERNAME` and `DPI_PASSWORD`; captures are processed locally and are not persisted. The frontend requires Node.js 20.19 or newer.
 
 In PowerShell, configure credentials and start the backend:
 
@@ -164,7 +164,7 @@ TLS Client Hello:
 | Simple (Single-threaded) | `src/main_working.cpp` | Learning, small captures |
 | Multi-threaded | `src/dpi_mt.cpp` | Production, large captures |
 
-The Java port is in `backend/` (Spring Boot 3, Java 17) with its React/Vite dashboard in `frontend/`. Start instructions are at the top of this document.
+The Java port is in `backend/` (Spring Boot 3, Java 25) with its React/Vite dashboard in `frontend/`. Start instructions are at the top of this document.
 
 ---
 
@@ -193,7 +193,7 @@ packet_analyzer/
 │   ├── dpi_mt.cpp             # ★ MULTI-THREADED VERSION ★
 │   └── [other files]          # Supporting code
 │
-├── backend/                    # Java 17 Spring Boot API and DPI pipeline
+├── backend/                    # Java 25 Spring Boot API and DPI pipeline
 │   └── src/main/java/com/packetinspector/dpi/
 ├── frontend/                   # React/Vite dashboard
 │   └── src/                    # API client, components, hooks, and page

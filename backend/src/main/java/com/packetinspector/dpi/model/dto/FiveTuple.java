@@ -26,7 +26,13 @@ public record FiveTuple(
         if (parts.length != 4) return 0L;
         long result = 0L;
         for (int i = 0; i < 4; i++) {
-            long octet = Long.parseLong(parts[i]);
+            long octet;
+            try {
+                octet = Long.parseLong(parts[i]);
+            } catch (NumberFormatException ignored) {
+                return 0L;
+            }
+            if (octet < 0 || octet > 255) return 0L;
             result |= (octet & 0xFFL) << (i * 8);
         }
         return result;
@@ -36,5 +42,10 @@ public record FiveTuple(
         return ipToString(srcIp) + ":" + srcPort + " -> " +
                ipToString(dstIp) + ":" + dstPort + " (" +
                Protocol.toString(protocol) + ")";
+    }
+
+    @Override
+    public String toString() {
+        return toFormattedString();
     }
 }

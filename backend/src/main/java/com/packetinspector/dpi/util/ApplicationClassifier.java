@@ -11,7 +11,7 @@ public final class ApplicationClassifier {
             Map.entry(AppType.YOUTUBE, new String[]{"youtube", "ytimg", "youtu.be", "yt3.ggpht"}),
             Map.entry(AppType.FACEBOOK, new String[]{"facebook", "fbcdn", "fb.com", "fbsbx", "meta.com"}),
             Map.entry(AppType.INSTAGRAM, new String[]{"instagram", "cdninstagram"}),
-            Map.entry(AppType.WHATSAPP, new String[]{"whatsapp", "wa.me"}),
+            Map.entry(AppType.WHATSAPP, new String[]{"whatsapp", "wa.me", "whatsapp.net"}),
             Map.entry(AppType.TWITTER, new String[]{"twitter", "twimg", "x.com", "t.co"}),
             Map.entry(AppType.NETFLIX, new String[]{"netflix", "nflxvideo", "nflximg"}),
             Map.entry(AppType.AMAZON, new String[]{"amazon", "amazonaws", "cloudfront", "aws"}),

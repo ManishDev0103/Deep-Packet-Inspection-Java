@@ -48,9 +48,10 @@ public enum AppType {
 
     public static AppType fromSni(String sni) {
         if (sni == null || sni.isBlank()) return UNKNOWN;
-        var s = sni.toLowerCase();
-        if (s.contains("youtube") || s.contains("ytimg") || s.contains("youtu.be")) return YOUTUBE;
-        if (s.contains("google") || s.contains("gstatic") || s.contains("googleapis") || s.contains("ggpht")) return GOOGLE;
+        var s = sni.toLowerCase(java.util.Locale.ROOT);
+        if (s.contains("google") || s.contains("gstatic") || s.contains("googleapis") || s.contains("ggpht")
+                || s.contains("gvt1")) return GOOGLE;
+        if (s.contains("youtube") || s.contains("ytimg") || s.contains("youtu.be") || s.contains("yt3.ggpht")) return YOUTUBE;
         if (s.contains("facebook") || s.contains("fbcdn") || s.contains("fb.com") || s.contains("meta.com")) return FACEBOOK;
         if (s.contains("instagram") || s.contains("cdninstagram")) return INSTAGRAM;
         if (s.contains("twitter") || s.contains("twimg") || s.contains("t.co") || s.contains("x.com")) return TWITTER;
@@ -66,6 +67,10 @@ public enum AppType {
         if (s.contains("discord") || s.contains("discordapp")) return DISCORD;
         if (s.contains("github")) return GITHUB;
         if (s.contains("cloudflare")) return CLOUDFLARE;
-        return UNKNOWN;
+        return HTTPS;
+    }
+
+    public String toDisplayName() {
+        return displayName;
     }
 }
