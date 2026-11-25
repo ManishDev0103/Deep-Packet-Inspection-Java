@@ -63,8 +63,9 @@ main { max-width: 1180px; margin: auto; padding: 0 24px 70px; }
 .credential-inputs input::placeholder, .rule-field textarea::placeholder { color: #617179; }
 .rule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 11px; }
 .rule-field { display: flex; flex-direction: column; gap: 7px; }
-.rule-field > span { color: #aab8ba; font-size: 10px; font-weight: 550; }
+.rule-field > label { color: #aab8ba; font-size: 10px; font-weight: 550; }
 .rule-field textarea { resize: vertical; min-height: 57px; padding: 8px 9px; font: 10px/1.5 ui-monospace, Consolas, monospace; }
+.rule-field small { color: #71838a; font-size: 10px; line-height: 1.4; }
 .rule-note { display: flex; gap: 7px; align-items: center; margin-top: 16px; color: #71838a; font-size: 9px; line-height: 1.4; }
 .rule-note svg { flex: 0 0 auto; width: 13px; height: 13px; fill: none; stroke: #849b98; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .action-row { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
@@ -153,7 +154,7 @@ main { max-width: 1180px; margin: auto; padding: 0 24px 70px; }
 /* ── Hamburger button ───────────────────────────────────────────── */
 .hamburger {
   display: none; flex-direction: column; justify-content: center; gap: 5px;
-  width: 36px; height: 36px; padding: 6px;
+  width: 44px; height: 44px; padding: 9px;
   background: none; border: 1px solid #26373e; border-radius: 7px; cursor: pointer;
 }
 .hamburger span { display: block; height: 2px; background: #94a5aa; border-radius: 2px; transition: transform .2s, opacity .2s; }
@@ -176,6 +177,7 @@ main { max-width: 1180px; margin: auto; padding: 0 24px 70px; }
 .mobile-nav-link:hover, .mobile-nav-link:focus {
   background: rgba(108,226,177,.07); border-color: rgba(108,226,177,.15); color: #6ce2b1;
 }
+.mobile-nav[hidden] { display: none; }
 
 /* ── Success banner ─────────────────────────────────────────────── */
 .success-banner {

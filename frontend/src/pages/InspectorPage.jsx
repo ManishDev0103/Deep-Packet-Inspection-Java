@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Metric } from '../components/Metric.jsx'
 import { RuleInput } from '../components/RuleInput.jsx'
 import { useCaptureProcessing } from '../hooks/useCaptureProcessing.js'
@@ -44,6 +44,25 @@ export default function InspectorPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { busy, error, report, run, reset, setError } = useCaptureProcessing()
 
+  useEffect(() => {
+    if (!menuOpen) return undefined
+
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+
+    function closeOnDesktop() {
+      if (window.matchMedia('(min-width: 761px)').matches) setMenuOpen(false)
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('resize', closeOnDesktop)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('resize', closeOnDesktop)
+    }
+  }, [menuOpen])
+
   function chooseFile(nextFile) {
     if (!nextFile) return
     setFile(nextFile)
@@ -88,21 +107,20 @@ export default function InspectorPage() {
           type="button"
           aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
           onClick={() => setMenuOpen((o) => !o)}
         >
           <span /><span /><span />
         </button>
       </header>
 
-      {menuOpen && (
-        <nav className="mobile-nav" aria-label="Mobile navigation">
-          {NAV_LINKS.map(({ href, label }) => (
-            <a key={href} href={href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
-              {label}
-            </a>
-          ))}
-        </nav>
-      )}
+      <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation" hidden={!menuOpen}>
+        {NAV_LINKS.map(({ href, label }) => (
+          <a key={href} href={href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
+            {label}
+          </a>
+        ))}
+      </nav>
 
       <main>
         <section className="intro">
@@ -117,7 +135,7 @@ export default function InspectorPage() {
               <div className="section-number">01</div>
               <div>
                 <h2>Capture file</h2>
-                <p>Choose an Ethernet PCAP to inspect</p>
+                <p id="capture-file-help">Choose a classic Ethernet PCAP or CAP file to inspect</p>
               </div>
             </div>
             <label
@@ -129,6 +147,8 @@ export default function InspectorPage() {
               <input
                 type="file"
                 accept=".pcap,.cap,application/vnd.tcpdump.pcap"
+                aria-label="Capture file"
+                aria-describedby="capture-file-help"
                 onChange={(e) => chooseFile(e.target.files[0])}
               />
               <span className="file-icon" aria-hidden="true">
@@ -151,10 +171,10 @@ export default function InspectorPage() {
               <span className="optional-tag">OPTIONAL</span>
             </div>
             <div className="rule-grid">
-              <RuleInput label="Source IPs" hint="192.168.1.25, 10.0.0.1" value={blockIps} onChange={setBlockIps} />
-              <RuleInput label="Applications" hint="YouTube, TikTok" value={blockApps} onChange={setBlockApps} />
-              <RuleInput label="Domains" hint="*.tiktok.com, ads.example.com" value={blockDomains} onChange={setBlockDomains} />
-              <RuleInput label="Destination ports" hint="80, 443, 8080" value={blockPorts} onChange={setBlockPorts} />
+              <RuleInput label="Source IPs" hint="Enter source IP addresses; one per line or comma-separated." value={blockIps} onChange={setBlockIps} />
+              <RuleInput label="Applications" hint="Enter application names such as YouTube; one per line or comma-separated." value={blockApps} onChange={setBlockApps} />
+              <RuleInput label="Domains" hint="Enter domains or wildcard domains; one per line or comma-separated." value={blockDomains} onChange={setBlockDomains} />
+              <RuleInput label="Destination ports" hint="Enter destination port numbers; one per line or comma-separated." value={blockPorts} onChange={setBlockPorts} />
             </div>
             <div className="rule-note"><InfoIcon /> Rules match source IP, destination port, application, and domain.</div>
           </section>
