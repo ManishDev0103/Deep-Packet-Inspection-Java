@@ -2,13 +2,37 @@
 
 ## Java Spring Boot + React Dashboard
 
-The Java 21 backend and React/Vite frontend are in `backend/` and `frontend/`. The backend binds to loopback and uses HTTP Basic credentials from `DPI_USERNAME` and `DPI_PASSWORD`; captures are processed locally and are not persisted. The frontend requires Node.js 20.19 or newer.
+This project was ported from C++ to Java. The active application is a Java 21 Spring Boot backend with a React/Vite frontend; the original C++ sources are preserved in [`archive/cpp/`](archive/cpp/). Captures are processed locally and are not persisted.
 
-In PowerShell, configure credentials and start the backend:
+### Prerequisites
+
+- JDK 21
+- Maven 3.9.9 or newer
+- Node.js 20.19 or newer and npm
+- MySQL 8 or a compatible MySQL server
+
+Clone the repository:
+
+```shell
+git clone https://github.com/ManishDev0103/Deep-Packet-Inspection-Java.git
+cd Deep-Packet-Inspection-Java
+```
+
+Configure the MySQL connection in PowerShell before starting the backend:
 
 ```powershell
-$env:DPI_USERNAME = "your-username"
-$env:DPI_PASSWORD = "your-password"
+$env:MYSQL_HOST = "localhost"
+$env:MYSQL_PORT = "3306"
+$env:MYSQL_DB = "dpi_db"
+$env:MYSQL_USER = "root"
+$env:MYSQL_PASSWORD = "<your-mysql-password>"
+```
+
+The same settings can be placed in `backend/src/main/resources/application.yml`. The database is created automatically if the MySQL user has permission. No `DPI_USERNAME` or `DPI_PASSWORD` authentication settings are currently implemented.
+
+Start the backend from the repository root:
+
+```powershell
 mvn -f backend\pom.xml spring-boot:run
 ```
 
@@ -19,7 +43,7 @@ npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173), upload a classic Ethernet PCAP, and apply optional source-IP, application, domain, or destination-port rules. The filtered PCAP is returned for download with packet and classification statistics. The engine processes IPv4 TCP/UDP traffic and classifies TLS SNI, HTTP Host, and DNS queries. Uploads are limited to 256 MB.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Vite proxies `/api` requests to the backend at `http://localhost:8080`. Upload a classic Ethernet PCAP and apply optional source-IP, application, domain, or destination-port rules. The filtered PCAP is returned for download with packet and classification statistics. The engine processes IPv4 TCP/UDP traffic and classifies TLS SNI, HTTP Host, and DNS queries. Uploads are limited to 256 MB.
 
 For Windows setup details, see [WINDOWS_SETUP.md](WINDOWS_SETUP.md).
 
@@ -157,56 +181,37 @@ TLS Client Hello:
                     └─────────────┘
 ```
 
-### C++ Versions
+### Original C++ Reference
 
-| Version | File | Use Case |
-|---------|------|----------|
-| Simple (Single-threaded) | `src/main_working.cpp` | Learning, small captures |
-| Multi-threaded | `src/dpi_mt.cpp` | Production, large captures |
-
-The Java port is in `backend/` (Spring Boot 3, Java 21) with its React/Vite dashboard in `frontend/`. Start instructions are at the top of this document.
+The project was ported from C++; its original single-threaded and multi-threaded sources are preserved under `archive/cpp/` for reference. The active Java 21 application is in `backend/`, with its React/Vite dashboard in `frontend/`.
 
 ---
 
 ## 4. File Structure
 
 ```
-packet_analyzer/
-├── include/                    # Header files (declarations)
-│   ├── pcap_reader.h          # PCAP file reading
-│   ├── packet_parser.h        # Network protocol parsing
-│   ├── sni_extractor.h        # TLS/HTTP inspection
-│   ├── types.h                # Data structures (FiveTuple, AppType, etc.)
-│   ├── rule_manager.h         # Blocking rules (multi-threaded version)
-│   ├── connection_tracker.h   # Flow tracking (multi-threaded version)
-│   ├── load_balancer.h        # LB thread (multi-threaded version)
-│   ├── fast_path.h            # FP thread (multi-threaded version)
-│   ├── thread_safe_queue.h    # Thread-safe queue
-│   └── dpi_engine.h           # Main orchestrator
-│
-├── src/                        # Implementation files
-│   ├── pcap_reader.cpp        # PCAP file handling
-│   ├── packet_parser.cpp      # Protocol parsing
-│   ├── sni_extractor.cpp      # SNI/Host extraction
-│   ├── types.cpp              # Helper functions
-│   ├── main_working.cpp       # ★ SIMPLE VERSION ★
-│   ├── dpi_mt.cpp             # ★ MULTI-THREADED VERSION ★
-│   └── [other files]          # Supporting code
-│
-├── backend/                    # Java 21 Spring Boot API and DPI pipeline
-│   └── src/main/java/com/packetinspector/dpi/
-├── frontend/                   # React/Vite dashboard
-│   └── src/                    # API client, components, hooks, and page
-├── generate_test_pcap.py      # Creates test data
-├── test_dpi.pcap              # Sample capture with various traffic
-└── README.md                  # This file!
+.
+├── archive/cpp/                # Preserved original C++ source and setup guide
+│   ├── include/                 # Archived C++ headers
+│   └── src/                     # Archived C++ implementation
+├── backend/                     # Java 21 Spring Boot application
+│   ├── src/main/java/           # API, DPI pipeline, and services
+│   ├── src/main/resources/      # Configuration and production frontend assets
+│   ├── src/main/webapp/         # Legacy JSP views
+│   └── pom.xml                  # Maven build
+├── frontend/                    # React/Vite dashboard
+│   ├── public/                  # Static assets
+│   ├── src/                     # React application
+│   └── package.json             # npm scripts and dependencies
+├── README.md                    # Project overview and setup
+└── WINDOWS_SETUP.md             # Windows development instructions
 ```
 
 ---
 
 ## 5. The Journey of a Packet (Simple Version)
 
-Let's trace a single packet through `main_working.cpp`:
+Let's trace a single packet through the archived `archive/cpp/src/main_working.cpp` reference implementation:
 
 ### Step 1: Read PCAP File
 
@@ -358,7 +363,7 @@ if (pkt.tuple.dst_port == 443 && pkt.payload_length > 5) {
 
 4. **Map SNI to App Type:**
    ```cpp
-   // In types.cpp
+   // In archive/cpp/src/types.cpp
    if (sni.find("youtube") != std::string::npos) {
        return AppType::YOUTUBE;
    }
@@ -421,7 +426,7 @@ for (const auto& [tuple, flow] : flows) {
 
 ## 6. The Journey of a Packet (Multi-threaded Version)
 
-The multi-threaded version (`dpi_mt.cpp`) adds **parallelism** for high performance:
+The archived multi-threaded version (`archive/cpp/src/dpi_mt.cpp`) adds **parallelism** for high performance:
 
 ### Architecture Overview
 
@@ -591,7 +596,7 @@ class TSQueue {
 
 ## 7. Deep Dive: Each Component
 
-### pcap_reader.h / pcap_reader.cpp
+### Archived C++ Reference: `archive/cpp/include/pcap_reader.h` / `archive/cpp/src/pcap_reader.cpp`
 
 **Purpose:** Read network captures saved by Wireshark
 
@@ -674,7 +679,7 @@ std::optional<std::string> HTTPHostExtractor::extract(
 }
 ```
 
-### types.h / types.cpp
+### Archived C++ Reference: `archive/cpp/include/types.h` / `archive/cpp/src/types.cpp`
 
 **Purpose:** Define data structures used throughout
 
@@ -893,62 +898,53 @@ Connection to YouTube:
 
 ## 10. Building and Running
 
-### Prerequisites
+### Development
 
-- **macOS/Linux** with C++17 compiler
-- **g++** or **clang++**
-- No external libraries needed!
+Run the backend from the repository root:
 
-### Build Commands
-
-**Simple Version:**
-```bash
-g++ -std=c++17 -O2 -I include -o dpi_simple \
-    src/main_working.cpp \
-    src/pcap_reader.cpp \
-    src/packet_parser.cpp \
-    src/sni_extractor.cpp \
-    src/types.cpp
+```powershell
+mvn -f backend\pom.xml spring-boot:run
 ```
 
-**Multi-threaded Version:**
-```bash
-g++ -std=c++17 -pthread -O2 -I include -o dpi_engine \
-    src/dpi_mt.cpp \
-    src/pcap_reader.cpp \
-    src/packet_parser.cpp \
-    src/sni_extractor.cpp \
-    src/types.cpp
+The backend listens on `http://127.0.0.1:8080`. The React dashboard runs separately in development:
+
+```powershell
+npm --prefix frontend install
+npm --prefix frontend run dev
 ```
 
-### Running
+Open `http://127.0.0.1:5173`; Vite proxies `/api` to the backend. The legacy JSP pages are available at `http://127.0.0.1:8080/legacy/report` and `http://127.0.0.1:8080/legacy/rules`.
 
-**Basic usage:**
-```bash
-./dpi_engine test_dpi.pcap output.pcap
+### Production Build
+
+Build the React assets into the backend's static resources, then package the executable WAR:
+
+```powershell
+npm --prefix frontend run build
+mvn -f backend\pom.xml package
+java -jar backend\target\dpi-backend-1.0.0.war
 ```
 
-**With blocking:**
-```bash
-./dpi_engine test_dpi.pcap output.pcap \
-    --block-app YouTube \
-    --block-app TikTok \
-    --block-ip 192.168.1.50 \
-    --block-domain facebook
+Spring Boot serves the built dashboard and API from `http://127.0.0.1:8080`.
+
+### Tests and Validation
+
+Run the backend test suite and build the frontend:
+
+```powershell
+mvn -f backend\pom.xml test
+npm --prefix frontend run build
 ```
 
-**Configure threads (multi-threaded only):**
-```bash
-./dpi_engine input.pcap output.pcap --lbs 4 --fps 4
-# Creates 4 LB threads × 4 FP threads = 16 processing threads
-```
+The frontend currently has no separate test script; its production build is the available validation command.
 
-### Creating Test Data
+### Troubleshooting
 
-```bash
-python3 generate_test_pcap.py
-# Creates test_dpi.pcap with sample traffic
-```
+- **Port 8080 or 5173 is occupied:** Stop the process using that port, then restart the affected service.
+- **Wrong Java version:** Check `java -version`; the backend requires JDK 21.
+- **MySQL connection fails:** Check the `MYSQL_*` settings and confirm the server is running and the user can create/access `dpi_db`.
+- **API requests fail in frontend development:** Start the backend on port 8080; Vite's `/api` proxy targets `http://localhost:8080`.
+- **JSP pages do not render:** Run the Spring Boot WAR with its embedded Tomcat/Jasper dependencies; open the `/legacy/...` route on port 8080, not Vite's port 5173.
 
 ---
 
@@ -1027,7 +1023,7 @@ python3 generate_test_pcap.py
 
 1. **Add More App Signatures**
    ```cpp
-   // In types.cpp
+   // In archive/cpp/src/types.cpp
    if (sni.find("twitch") != std::string::npos)
        return AppType::TWITCH;
    ```
@@ -1077,6 +1073,6 @@ The key insight is that even HTTPS traffic leaks the destination domain in the T
 
 ## Questions?
 
-If you have questions about any part of this project, the code is well-commented and follows the same flow described in this document. Start with the simple version (`main_working.cpp`) to understand the concepts, then move to the multi-threaded version (`dpi_mt.cpp`) to see how parallelism is added.
+If you have questions about any part of this project, the code is well-commented and follows the same flow described in this document. The original C++ examples remain in `archive/cpp/`; the active application is the Java implementation described above.
 
 Happy learning! 🚀
