@@ -1,7 +1,10 @@
 package com.packetinspector.dpi.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistration;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewResolverRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -19,5 +22,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void configureViewResolvers(ViewResolverRegistry registry) {
         registry.jsp("/WEB-INF/views/", ".jsp");
+    }
+
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        ViewControllerRegistration notFound = registry.addViewController("/error/404.html");
+        notFound.setViewName("error/404");
+        notFound.setStatusCode(HttpStatus.NOT_FOUND);
     }
 }

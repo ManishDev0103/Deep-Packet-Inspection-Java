@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="The requested page could not be found. Return to the Deep Packet Inspector dashboard.">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>404 — Page Not Found | DPI Legacy Portal</title>
     <style>

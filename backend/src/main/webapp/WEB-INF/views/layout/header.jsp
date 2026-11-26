@@ -11,18 +11,18 @@
     <title><c:if test="${not empty pageTitle}">${pageTitle} | </c:if>DPI Legacy Portal</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; overflow-x: hidden; }
-        body { font-family: Segoe UI, -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: #0f172a; color: #f8fafc; min-width: 320px; }
+        html, body { margin: 0; padding: 0; }
+        body { font-family: Segoe UI, -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: #0f172a; color: #f8fafc; }
         header { background: #1e293b; padding: 0 2rem; height: 60px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50; }
         .logo-link { color: #38bdf8; text-decoration: none; font-size: 1.1rem; font-weight: 700; }
         .logo-link:hover, .logo-link:focus { color: #7dd3fc; }
         nav.desktop-nav a { color: #94a3b8; text-decoration: none; margin-left: 1.5rem; font-weight: 500; font-size: 0.9rem; }
         nav.desktop-nav a:hover, nav.desktop-nav a:focus { color: #f8fafc; }
-        .hamburger-btn { display: none; flex-direction: column; justify-content: center; gap: 5px; width: 36px; height: 36px; padding: 6px; background: none; border: 1px solid #334155; border-radius: 6px; cursor: pointer; }
+        .hamburger-btn { display: none; flex-direction: column; justify-content: center; gap: 5px; width: 44px; height: 44px; padding: 8px; background: none; border: 1px solid #334155; border-radius: 6px; cursor: pointer; }
         .hamburger-btn span { display: block; height: 2px; background: #94a3b8; border-radius: 2px; }
         #mobile-nav { display: none; position: fixed; inset: 60px 0 0; z-index: 100; background: rgba(15,23,42,.97); padding: 1.5rem; flex-direction: column; gap: 0.5rem; border-top: 1px solid #334155; overflow-y: auto; }
         #mobile-nav.open { display: flex; }
-        #mobile-nav a { display: block; padding: 0.875rem 1rem; color: #cbd5e1; text-decoration: none; font-size: 1rem; font-weight: 500; border-radius: 8px; border: 1px solid transparent; }
+        #mobile-nav a { display: flex; align-items: center; min-height: 44px; padding: 0.75rem 1rem; color: #cbd5e1; text-decoration: none; font-size: 1rem; font-weight: 500; border-radius: 8px; border: 1px solid transparent; }
         #mobile-nav a:hover, #mobile-nav a:focus { background: rgba(56,189,248,.07); border-color: rgba(56,189,248,.2); color: #38bdf8; }
         .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
         .card { background: #1e293b; border-radius: 8px; border: 1px solid #334155; padding: 1.5rem; margin-bottom: 1.5rem; }
@@ -37,7 +37,11 @@
         th { color: #94a3b8; font-weight: 600; background: #0f172a; }
         td { color: #e2e8f0; }
         .form-row { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+        .form-field { display: flex; flex: 1; flex-direction: column; gap: 0.35rem; min-width: 0; }
+        .form-field label { color: #cbd5e1; font-size: 0.875rem; font-weight: 600; }
+        .field-help { margin: 0; color: #94a3b8; font-size: 0.8rem; line-height: 1.4; }
         input, select, button { padding: 0.5rem 0.75rem; border-radius: 4px; border: 1px solid #475569; background: #0f172a; color: #f8fafc; font: inherit; }
+        input, select { min-width: 0; }
         input:focus, select:focus { outline: 2px solid #38bdf8; outline-offset: 1px; }
         button { background: #0284c7; border-color: #0284c7; cursor: pointer; font-weight: 600; }
         button:hover { background: #0369a1; }
@@ -46,6 +50,10 @@
         .alert { padding: 0.875rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
         .alert-success { background: rgba(21,128,61,.2); border: 1px solid rgba(21,128,61,.4); color: #86efac; }
         .alert-error { background: rgba(185,28,28,.2); border: 1px solid rgba(185,28,28,.4); color: #fca5a5; }
+        .delete-confirmation { margin-top: 1rem; padding: 1rem; border: 1px solid rgba(220,38,38,.45); border-radius: 6px; background: rgba(127,29,29,.18); }
+        .delete-confirmation[hidden] { display: none; }
+        .delete-confirmation p { margin: 0 0 0.75rem; overflow-wrap: anywhere; }
+        .delete-confirmation-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
         footer { text-align: center; padding: 2rem 1rem; color: #64748b; font-size: 0.85rem; border-top: 1px solid #1e293b; }
         footer a { color: #38bdf8; text-decoration: none; }
         footer a:hover { text-decoration: underline; }
@@ -69,6 +77,7 @@
         <a href="/">React Dashboard</a>
     </nav>
     <button class="hamburger-btn" type="button" aria-label="Open navigation menu" aria-expanded="false"
+            aria-controls="mobile-nav"
             id="hamburger-btn" onclick="toggleMobileNav()">
         <span></span><span></span><span></span>
     </button>
@@ -84,7 +93,29 @@ function toggleMobileNav() {
     var btn = document.getElementById('hamburger-btn');
     var open = nav.classList.toggle('open');
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
     nav.setAttribute('aria-hidden', open ? 'false' : 'true');
 }
+
+function closeMobileNav() {
+    var nav = document.getElementById('mobile-nav');
+    var btn = document.getElementById('hamburger-btn');
+    nav.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-label', 'Open navigation menu');
+    nav.setAttribute('aria-hidden', 'true');
+}
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeMobileNav();
+});
+
+window.addEventListener('resize', function () {
+    if (window.matchMedia('(min-width: 641px)').matches) closeMobileNav();
+});
+
+document.getElementById('mobile-nav').addEventListener('click', function (event) {
+    if (event.target.closest('a')) closeMobileNav();
+});
 </script>
 <div class="container">

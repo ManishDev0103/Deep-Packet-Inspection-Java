@@ -2,7 +2,7 @@
 
 ## Java Spring Boot + React Dashboard
 
-Install Java 25 (latest LTS), Maven 3.9 or newer, and Node.js 20.19 or newer. Set `JAVA_HOME` to the JDK 25 installation and ensure `%JAVA_HOME%\bin` is on `PATH`. In PowerShell, start the backend:
+Install JDK 21, Maven 3.9 or newer, and Node.js 20.19 or newer. Set `JAVA_HOME` to the JDK 21 installation and ensure `%JAVA_HOME%\bin` is on `PATH`. In PowerShell, start the backend:
 
 ```powershell
 $env:DPI_USERNAME = "your-username"

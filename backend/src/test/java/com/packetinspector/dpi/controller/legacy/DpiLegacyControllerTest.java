@@ -8,6 +8,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -43,12 +44,31 @@ class DpiLegacyControllerTest {
                         .param("ruleType", "IP")
                         .param("ruleValue", "192.168.1.100"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/legacy/rules"));
+                .andExpect(redirectedUrl("/legacy/rules"))
+                .andExpect(flash().attribute("successMsg", "Rule added: IP = 192.168.1.100"));
 
         mockMvc.perform(post("/legacy/rules/delete")
                         .param("ruleType", "IP")
                         .param("ruleValue", "192.168.1.100"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/legacy/rules"));
+                .andExpect(redirectedUrl("/legacy/rules"))
+                .andExpect(flash().attribute("successMsg", "Rule deleted: IP = 192.168.1.100"));
+    }
+
+    @Test
+    void reportsConcreteFailureWhenRuleTypeIsUnknown() throws Exception {
+        mockMvc.perform(post("/legacy/rules/add")
+                        .param("ruleType", "UNKNOWN")
+                        .param("ruleValue", "example"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/legacy/rules"))
+                .andExpect(flash().attribute("errorMsg", "Failed to add rule: Unknown rule type: UNKNOWN"));
+    }
+
+    @Test
+    void configuredNotFoundPathRendersCustomJspView() throws Exception {
+        mockMvc.perform(get("/error/404.html"))
+                .andExpect(status().isNotFound())
+                .andExpect(view().name("error/404"));
     }
 }
